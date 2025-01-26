@@ -1,4 +1,4 @@
-# Análise Estatística e Modelagem com Dados de Bestsellers da Amazon
+# Análise Estatística com Dados de Bestsellers da Amazon
 
 ## Descrição
 Este projeto explora os dados de bestsellers da Amazon entre 2009 e 2022, com foco em variáveis como:
