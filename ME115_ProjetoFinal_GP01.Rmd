@@ -1,0 +1,375 @@
+---
+title: "ME115B - Linguagem R"
+author:
+- 'Décio Miranda Filho, RA: 236087'
+- 'Felipe Scalabrin Dosso, RA: 236110'
+- 'Larissa Fazolin, RA: 217395'
+- 'Nathan Augusto Elias, RA: 236258'
+subtitle: "Projeto Final - 1S2022"
+output:
+  pdf_document:
+    fig_caption: yes
+  html_document:
+    df_print: paged
+header-includes: \renewcommand{\and}{\\} \usepackage{float} \floatplacement{figure}{H}
+  \renewcommand{\figurename}{Figura} \renewcommand{\tablename}{Tabela}
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      fig.height = 3, fig.width = 5, eval = TRUE,
+                      fig.align = "center")
+options(digits = 3)
+
+# Define o local em que este arquivo foi salvo como diretório de trabalho
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+# Instalar, se preciso, e carregar os seguintes pacotes:
+library(tidyverse)
+library(magrittr)
+library(knitr)
+library(ggpubr)
+library(pander)
+require(gridExtra)
+library(RColorBrewer)
+```
+
+
+```{r}
+## Funções
+
+# Junta strings, separando as últimas por "e" e as demais por ","
+junta_nomes <- function(string){
+  string %<>% str_replace_all("_", " ")
+  n <- length(string)
+  string <- str_to_title(string)
+  if (n >= 2){
+    return(str_c(string, c(rep(", ", n-2), " e ", ""), collapse = ""))
+    } 
+  else{
+    return(string)
+  }
+}
+```
+
+
+```{r}
+# Leitura do conjunto de dados
+# É assumido que ele se encontra no mesmo diretório em que se trabalha
+bestsellers <- read_csv("bestsellers_with_categories_2022_03_27.csv")
+```
+
+
+# Top 50 dos livros mais vendidos da Amazon, de 2009 até 2022
+
+
+## Introdução
+
+Este relatório consiste na análise dos 50 livros mais vendidos da Amazon por ano, durante o período de 2009 até 2022. Com o intuito de entender melhor o sucesso de vendas dos livros em questão, foram levantadas algumas perguntas de interesse, procurando encontrar padrões. Entre elas:
+
+Há relação entre o custo a pagar e a popularidade dos livros? Como a média de preços foi mudando com o decorrer dos anos? No geral, qual gênero de livro é mais caro? Qual gênero é mais popular? Quais autores tiveram o maior número de bestsellers, segundo esses Tops 50? Dentre eles, quantos são homens e quantas são mulheres? Há palavras predominantes nos títulos desses livros? Como a quantidade de reviews e a média de avaliação dos usuários influenciam nesses diferentes aspectos?
+
+Sendo assim, este relatório apresenta análises com foco individual em cada diferente aspecto dos livros em questão - isto é, nas variáveis do conjunto de dados -, além de estudos sobre a relação entre essas informações.
+
+
+## Banco de Dados
+
+```{r}
+# Alterando o nome da coluna `User Rating` por `User_Rating` (evita problemas)
+names(bestsellers)[3] <- "User_Rating"
+```
+
+O conjunto de dados que aqui será denotado como `bestsellers` pode ser encontrado em [[Kaggle: Amazon Top 50 Bestselling Books 2009 - 2022](https://www.kaggle.com/datasets/chriskachmar/amazon-top-50-bestselling-books-2009-2022?select=bestsellers_with_categories_2022_03_27.csv)]. Parte destes dados foram coletados por Chris Kachmar e são uma atualização do conjunto obtido por Sooter Saalu (presente em [[Kaggle: Amazon Top 50 Bestselling Books 2009 - 2019](https://www.kaggle.com/datasets/sootersaalu/amazon-top-50-bestselling-books-2009-2019)]), pela técnica de web scrapping. 
+
+Sendo do tipo *tibble*, `bestsellers` contém `r nrow(bestsellers)` observações e `r ncol(bestsellers)` variáveis, cujos nomes são `r junta_nomes(names(bestsellers))`. 
+A seguir, o que cada coluna representa:
+
+- `Name`: < `r class(bestsellers$Name)` >, título do livro;
+- `Author`: < `r class(bestsellers$Author)` >, nome do autor do livro;
+- `User_Rating`: < `r class(bestsellers$User_Rating)` >, avaliação média do livro pelos usuários da Amazon;
+- `Reviews`: < `r class(bestsellers$Reviews)` >, quantidade de reviews do livro na Amazon;
+- `Price`: < `r class(bestsellers$Price)` >, preço do livro na Amazon, em dólares;
+- `Year`: < `r class(bestsellers$Year)` >, ano em que o livro esteve no Top 50 dos livros mais vendidos da Amazon;
+- `Genre`: < `r class(bestsellers$Genre)` >, gênero do livro.
+
+\newpage
+
+## Análise Exploratória e/ou Descritiva
+
+*(A) Etapa focada nas variáveis categóricas (livros, títulos e autores)*
+
+```{r}
+top20_livros <- bestsellers %>% 
+  arrange(desc(Reviews)) %>% 
+  filter(User_Rating == max(bestsellers$User_Rating)) %>%
+  select(-User_Rating) %>% 
+  slice(1:20)
+```
+
+Para dar início a essa análise, foi elaborada a Tabela \ref{tab:teste}, na qual resumem-se em ordem decrescente de reviews os livros que apresentaram média máxima de avaliação pelos usuários, com suas devidas informações a respeito de seus autores, dos anos em que foram bestsellers, quantidade de reviews, preço e gênero. Em primeira análise, é possível observar que muitos desses livros apareceram mais de uma vez no Top 50, como, por exemplo, "I Love You to the Moon and Back" e "The Very Hungry Caterpillar", de Amelia Hepworth e Eric Carle, respectivamente. Nota-se também que livros referentes à cultura pop estão presentes nesta lista, como "The Deep End (Diary of a Wimpy Kid Book 15)" (conhecido como "O Diário de um Banana", em português), de Jeff Kinney. Em segunda análise, vê-se que houve uma predominância de livros do gênero ficção contra apenas três de não ficção, além de preços que variam de 4 dólares a 17, com a média sendo de `r mean(top20_livros$Price)` dólares. É interessante notar que nesta lista há livros desde de 2012 até 2022, com moda no ano de 2020 (totalizando oito de vinte ocorrências).
+
+```{r}
+top20_livros %>% 
+  pander(split.cell = 80, split.table = Inf,
+         caption = "\\label{tab:teste} Os 20 livros com maior nº de reviews e avaliação máxima.")
+```
+
+```{r}
+# Guarda todas as palavras presentes nos títulos dos livros em `todas_strings`
+todas_strings <- NULL
+for (titulo in bestsellers[[1]]){
+  titulo <- gsub("[[:punct:] ]+", " ", titulo)
+  total_palavras <- str_count(titulo, "\\w+")
+  palavras <- word(titulo, 1:total_palavras, sep = fixed(" "))
+  todas_strings <- c(todas_strings, palavras)
+  todas_strings %<>% str_to_lower() 
+}
+
+# Remove todas as palavras que não contêm apenas letras
+so_letras <- which(str_detect(todas_strings, "^[a-zA-Z]+$"))
+todas_palavras <- NULL
+for (i in so_letras){
+  todas_palavras <- c(todas_palavras, todas_strings[i])
+}
+todas_palavras %<>% str_to_title()
+
+# Tabela com as frequências das palavras
+freq_palavras <- todas_palavras %>% 
+  table() %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq))
+colnames(freq_palavras) <- c("Palavra", "Frequência")
+
+# Removendo manualmente algumas conjunções, pronomes, etc
+freq_palavras %<>%
+  filter(str_count(Palavra) > 2) %>% 
+  filter(Palavra != "The", Palavra != "And", Palavra != "For",
+         Palavra != "That", Palavra != "With", Palavra != "You",
+         Palavra != "Your", Palavra != "How", Palavra != "What",
+         Palavra != "From", Palavra != "Why", Palavra != "Who", 
+         Palavra != "Where")
+
+# Top 10 geral das palavras predominantes
+top10palavras <- freq_palavras %>% head(10)
+
+# Top 10 dos adjetivos predominantes
+# Obs: `manual` foi retirado pois pode ser ambíguo
+top10adj <- freq_palavras %>% 
+  filter(Palavra != "Book", Palavra != "Love", Palavra != "Novel",
+         Palavra != "Life", Palavra != "Guide", Palavra != "Kids",
+         Palavra != "Edition", Palavra != "Man", Palavra != "Coloring",
+         Palavra != "Dog", Palavra != "Series", Palavra != "Cookbook",
+         Palavra != "World", Palavra != "Can", Palavra != "Fifty",
+         Palavra != "People", Palavra != "Secret", Palavra != "Shades",
+         Palavra != "Art", Palavra != "Recipes", Palavra != "Books",
+         Palavra != "First", Palavra != "Girl", Palavra != "Habits",
+         Palavra != "Kid", Palavra != "Languages", Palavra != "About",
+         Palavra != "Body", Palavra != "Diary", Palavra != "Harry",
+         Palavra != "Killing", Palavra != "Lasts", Palavra != "One",
+         Palavra != "Potter", Palavra != "Freedom", Palavra != "Games",
+         Palavra != "Hunger", Palavra != "Living", Palavra != "Story",
+         Palavra != "Things", Palavra != "Workbook", Palavra != "Association",
+         Palavra != "Bear", Palavra != "Change", Palavra != "Food",
+         Palavra != "Manual", Palavra != "Publication", Palavra != "School",
+         Palavra != "Time", Palavra != "Why", Palavra != "Animals",
+         Palavra != "Are") %>% 
+  head(10)
+```
+
+\newpage
+
+Em seguida, foram questionados possíveis padrões nos títulos dos livros presentes no conjunto de dados aqui chamado de `bestsellers`. Foram reunidas todas as palavras e suas frequências, conforme a Figura \ref{fig:palavras}. Vale ressaltar que palavras de algumas classes foram removidas (conjunções, pronomes, artigos, etc) pois, apesar de frequentes, não apresentam informações relevantes para essa análise. Esperava-se que as palavras mais utilizadas nos títulos tornassem explícitas algumas motivações populares dos leitores e, de fato, a alta ocorrência de palavras como *Love* (amor), *Life* (vida) e *Kids* (crianças) apoia essa hipótese. No entanto, ainda mais comum foram meta-palavras, i.e., palavras referentes ao livro em si, como *Book* (livro), *Novel* (romance), *Guide* (guia) e *Edition* (edição).
+
+```{r palavras, fig.width = 11, fig.height = 4.5, fig.cap = "\\label{fig:palavras} Gráfico de frequência das 10 palavras e adjetivos mais utilizados nos títulos dos bestsellers da Amazon, de 2009 até 2022."}
+graf_palavras <- top10palavras %>% 
+  ggplot(aes(x = reorder(Palavra, Frequência), 
+             y = Frequência, 
+             fill = Palavra)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Palavras predominantes nos títulos dos livros",
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Palavras",
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  coord_flip() +
+  geom_text(aes(label = Frequência), hjust = 1.5) +
+  scale_fill_brewer(palette = "Paired")
+
+graf_adj <- top10adj %>% 
+  ggplot(aes(x = reorder(Palavra, Frequência), 
+             y = Frequência, 
+             fill = Palavra)) +
+  geom_col(show.legend = FALSE) +
+  labs(title = "Adjetivos predominantes nos títulos dos livros",
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Adjetivos", 
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  coord_flip() +
+  geom_text(aes(label = Frequência), hjust = 1.5) +
+  scale_fill_brewer(palette = "Paired")
+
+grid.arrange(graf_palavras, graf_adj, ncol = 2)
+```
+
+Do lado direito da Figura \ref{fig:palavras} temos um gráfico semelhante, mas dessa vez limitado apenas aos adjetivos. Com variância de `r var(top10adj$Frequência)` para a distribuição das frequências dos adjetivos contra `r var(top10palavras$Frequência)` das palavras sem restrição de classe, nota-se que não houve adjetivos muito mais frequentes que os outros, como foi o caso da palavra *Book* no gráfico da esquerda, que apareceu `r top10palavras[1, 2]` vezes. Dado que a sede da Amazon se situa em Seattle, Washington, nos EUA e que um dos adjetivos com maior número de ocorrências trata-se de *American* (americano), é possível que haja uma concentração maior de usuários da plataforma na América do Norte.
+
+```{r}
+# Top 20 dos autores mais frequentes, com sua respectiva frequência e sexo
+sexo_count <- bestsellers %>% 
+  select(-Name) %>% 
+  group_by(Author) %>% 
+  summarise(Frequency = n()) %>% 
+  arrange(desc(Frequency)) %>% 
+  head(20) %>% 
+  mutate(Sex = c("Male", "Male", "Female", "Other", "Male",
+                 "Male", "Male", "Male", "Male", "Male",
+                 "Male", "Female", "Male", "Male", "Male",
+                 "Male", "Female", "Female", "Female", "Male"))
+```
+
+```{r sexo, fig.cap = "\\label{fig:sexo} Gráfico de barras com a proporção de sexo dos 20 autores com mais bestsellers na Amazon, de 2009 até 2022.", fig.height = 2.4, fig.width = 4}
+sexo_count %>%
+  ggplot(aes(x = Sex, fill = Sex, y = (..count..)/sum(..count..))) +
+  geom_bar(show.legend = FALSE) +
+  labs(title = "Sexo dos 20 autores com mais bestsellers",
+       subtitle = "Top 50 bestsellers da Amazon, de 2009 até 2022", 
+       x = "Sexo", y = "Porcentagem", caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_discrete(labels = c("Feminino", "Masculino", "Outro")) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+Para o último item desta etapa, o foco se deu nos criadores dessas obras. A partir de um levantamento dos 20 autores com mais bestsellers na Amazon, dentre o Top 50 de 2009 até 2022, foram computadas as porcentagens segundo o sexo dos escritores em questão, como mostra a Figura \ref{fig:sexo}. Percebe-se que existe uma forte predominância de homens, totalizando `r length(which(sexo_count$Sex == "Male"))` autores do sexo masculino contra `r length(which(sexo_count$Sex == "Female"))` do sexo feminino. A categoria `Outro`, com `r length(which(sexo_count$Sex == "Other"))` ocorrência, refere-se à `r sexo_count$Author[which(sexo_count$Sex == "Other")]`.
+
+
+*(B) Etapa focada nas variáveis numéricas (avaliações, reviews e preços)*
+
+Pela Figura \ref{fig:ratingsbar}, nota-se que a distribuição das avaliações médias dos usuários para os bestsellers possui uma assimetria à esquerda. Ou seja, há uma concentração maior de livros com rating elevado, o que era esperado dado que tratam-se dos livros com maior sucesso de vendas na plataforma da Amazon. Ademais, com média `r mean(bestsellers$User_Rating)` (linha tracejada vermelha) e mediana `r median(bestsellers$User_Rating)` (linha tracejada azul), percebe-se que, mesmo com a presença de alguns outliers com avaliação abaixo de 4.0, a diferença entre essas medidas centrais ainda foi pequena. Quanto às medidas de dispersão, as avaliações dos usuários tem variância de `r var(bestsellers$User_Rating)`, desvio padrão de `r sd(bestsellers$User_Rating)` e amplitude de `r max(bestsellers$User_Rating) - min(bestsellers$User_Rating)`, com a nota mínima sendo `r min(bestsellers$User_Rating)` e a máxima `r max(bestsellers$User_Rating)`. Sob a ótica de gênero dos livros, ambas as distribuições são bem próximas.
+
+```{r ratingsbar, fig.cap = "\\label{fig:ratingsbar} Gráfico de barras das avaliações médias dos usuários, por gênero de livro dos bestsellers da Amazon, de 2009 até 2022 (com linha tracejada vermelha e azul representando a média e a mediana, respectivamente)."}
+bestsellers %>%
+  ggplot(aes(x = User_Rating, fill = Genre)) +
+  geom_bar(show.legend = FALSE) + 
+  facet_grid(~ Genre) +
+  labs(title = "Avaliações médias dos usuários, por gênero",
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Avaliação média", y = "Quantidade de livros",
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  geom_vline(xintercept = mean(bestsellers$User_Rating), 
+             color = "red", linetype = 2) +
+  geom_vline(xintercept = median(bestsellers$User_Rating),
+             color = "blue", linetype = 2) +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+Além disso, segue na Figura \ref{fig:ratingsbox} as principais informações referentes aos quartis da distribuição das avaliações dos usuários. Vê-se que em quase todos os anos a mediana dos livros de ficção foi superior aos de não ficção, exceto em 2022. Visualmente nota-se também um ligeiro aumento geral nas medianas e decréscimo na dispersão das notas a partir da segunda metade do período computado. Houve presença de outliers em múltiplos anos.
+
+```{r ratingsbox, fig.cap = "\\label{fig:ratingsbox} Boxplots das avaliações médias dos usuários, por gênero de livro e ano dos bestsellers da Amazon, de 2009 até 2022."}
+bestsellers %>% 
+  ggplot(aes(x = factor(Year), y = User_Rating, fill = Genre)) +
+  geom_boxplot() +
+  labs(title = "Boxplots das avaliações médias dos usuários",
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Ano", y = "Avaliação média", 
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  scale_fill_brewer(name = "Gênero", labels = c("Ficção", "Não Ficção"),
+                     palette = "Dark2") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
+
+Quanto ao estudo da quantidade de reviews por gênero, tem-se que o primeiro quartil, a mediana e o terceiro quartil para os livros de ficção foram, respectivamente, de `r quantile(bestsellers$Reviews[bestsellers$Genre == "Fiction"], 0.25)`, `r median(bestsellers$Reviews[bestsellers$Genre == "Fiction"])` e `r quantile(bestsellers$Reviews[bestsellers$Genre == "Fiction"], 0.75)`; já para os de não ficção, foram de `r quantile(bestsellers$Reviews[bestsellers$Genre == "Non Fiction"], 0.25)`, `r median(bestsellers$Reviews[bestsellers$Genre == "Non Fiction"])` e `r quantile(bestsellers$Reviews[bestsellers$Genre == "Non Fiction"], 0.75)`. Essas informações estão melhor apresentadas na Figura \ref{fig:reviews}, onde nota-se também uma grande quantidade de outliers. Para o gênero de ficção, identifica-se uma grande concentração de outliers acima de 50 mil reviews, enquanto que para o outro gênero essa proporção é ligeiramente menor.
+
+```{r reviews, fig.cap = "\\label{fig:reviews} Boxplots da quantidade de reviews, por gênero de livro dos bestsellers da Amazon, de 2009 até 2022.", fig.height = 2.5}
+bestsellers %>%
+  mutate(Genre = as.factor(Genre)) %>%
+  ggplot(aes(x = Reviews, y = Genre, fill = Genre)) +
+  geom_boxplot(show.legend = FALSE) +
+  labs(title = "Boxplots da quantidade de reviews, por gênero",
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Quantidade de Reviews", y = "Gênero", 
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  scale_y_discrete(labels = c("Ficção", "Não Ficção")) +
+  coord_flip() +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+Agora, de modo a estudar a variação na média dos preços conforme o passar dos anos, foi plotado o gráfico que se vê na Figura \ref{fig:linhas}, por gênero de livro. A partir dele, percebe-se que os preços variaram intensamente dentro do espaço de 13 anos, especialmente no período de 2009 até 2014. Logo após, identifica-se uma aproximação entre a média de preços de ambos os gêneros, além de uma redução geral. Além disso, vale destacar que durante quase toda a série histórica aqui estudada, a média nos preços dos livros de não ficção foi maior do que a dos de ficção.
+
+A hipótese inicial do grupo era de que a média dos preços aumentasse de maneira quase linear conforme se aproximasse do ano atual (2022); no entanto, os dados apontam uma média geral menor na segunda metade do período aqui tratado. Tendo a Amazon uma plataforma digital, é possível que isso tenha ocorrido devido à difusão e ao aumento da acessibilidade de eBooks, isto é, livros digitais que costumam custar mais barato que suas versões físicas.
+
+Sem separação de gêneros, a média geral dos preços foi de `r mean(bestsellers$Price)`, com mediana de `r median(bestsellers$Price)`, variância de `r var(bestsellers$Price)`, desvio de `r sd(bestsellers$Price)` e amplitude de `r max(bestsellers$Price) - min(bestsellers$Price)`. Os anos com as maiores médias foram `r junta_nomes(bestsellers$Year[which(bestsellers$Price == max(bestsellers$Price))])`. 
+
+```{r linhas, fig.cap = "\\label{fig:linhas} Gráfico de linhas da variação na média dos preços ao passar dos anos, por gênero de livro dos bestsellers da Amazon, de 2009 até 2022.", fig.height = 2.5}
+bestsellers %>% 
+  group_by(Year, Genre) %>%
+  summarize(Price_Mean = mean(Price)) %>%
+  ggplot(aes(x = Year, y = Price_Mean, color = Genre)) +
+  geom_line() +
+  labs(title = "Variação na média dos preços, por gênero de livro", 
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Ano", y = "Preço médio",
+       caption = "Fonte: kaggle.com") +
+  scale_color_brewer(name = "Gênero", labels = c ("Ficção", "Não Ficção"),
+                     palette = "Dark2") +
+  theme_bw()
+```
+
+Por fim, foram realizados alguns estudos quanto à relação entre essas diferentes variáveis. Pela Figura \ref{fig:revpric}, nota-se uma tendência à diminuição na quantidade de reviews para livros de preço maior. Apesar de todos os livros neste conjunto de dados serem um sucesso de vendas, é possível que, por alguns deles apresentarem um custo maior, o público de leitores com poder aquisitivo para adquirí-los seja mais limitado e, por consequência, menos pessoas são capazes de opinar sobre os conteúdos dos livros em questão através de uma review. No entanto, com correlação de `r cor(bestsellers$Reviews, bestsellers$Price)` entre essas variáveis, sua relação de dependência é fraca.
+
+```{r revpric, fig.cap = "\\label{fig:revpric} Gráfico de relação entre a quantidade de reviews e o preço dos livros bestsellers da Amazon, de 2009 até 2022.", fig.height = 2.5}
+bestsellers %>% 
+  ggplot(aes(x = Price, y = Reviews)) +
+  geom_point(alpha = 0.5, show.legend = FALSE) + 
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  scale_y_log10() +
+  labs(title = "Quantidade de reviews em função do preço", 
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Preço", y = "Quantidade de Reviews (log10)",
+       caption = "Fonte: kaggle.com") +
+  theme_bw() +
+  stat_cor(label.y.npc = "top", label.x.npc = "center", 
+           method = "pearson", hjust = -0.3) +
+  theme(legend.position = "none")
+```
+
+Na Figura \ref{fig:revratgrid}, por outro lado, é estudada a avaliação média dos usuários em função da quantidade de reviews dos bestsellers. Observa-se que há uma maior concentração de pontos em torno da nota 4.5, justificada pela popularidade dos livros neste conjunto de dados. Contudo, pelas retas de modelo linear dispostas nesse gráfico, é notável um sensível decréscimo na quantidade de reviews conforme aumento da avaliação para o gênero de ficção (ou seja, não necessariamente os livros com maior quantidade de reviews são aqueles com as melhores avaliações) e o fenômeno oposto para o de não ficção.
+
+```{r revratgrid, fig.cap = "\\label{fig:revratgrid} Gráfico de relação entre a avaliação média dos usuários e a quantidade de reviews, por gênero dos bestsellers da Amazon, de 2009 até 2022."}
+bestsellers %>% 
+  ggplot(aes(x = User_Rating, y = Reviews, color = Genre)) +
+  geom_point(alpha = 0.5) +
+  theme_bw() +
+  labs(title = "Avaliação média em função das reviews", 
+       subtitle = "Top 50 bestsellers da Amazon por ano, de 2009 até 2022",
+       x = "Avaliação média", y = "Quantidade de reviews",
+       caption = "Fonte: kaggle.com") +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_grid(~ Genre) +
+  theme(legend.position = "none") +
+  stat_cor(label.y.npc = "top", label.x.npc = "center", 
+           method = "pearson", vjust = 2, hjust = 0.35) +
+  scale_color_brewer(palette = "Dark2")
+```
+
+
+## Considerações Finais
+
+Em síntese, observou-se que muitos livros e autores apareceram na lista dos 50 bestsellers em múltiplos anos. Dentre estes livros, grande parte deles era do gênero ficção e a média de preços destes livros foi de `r mean(top20_livros$Price)` dólares, o que parece um valor razoável. Quanto a estes autores mais frequentes, foi visto que a sua maioria era do sexo masculino.
+
+Agora, em uma análise geral dos livros, notou-se que algumas palavras foram bem mais frequentes que outras nos títulos, como é o caso de *Book* (livro) e *Love* (amor). Outras palavras frequentes, como *Kids* (crianças) e *American* (americano) podem refletir algo sobre as motivações e a identidade do público mais comum de leitores.
+
+Quanto às variáveis numéricas, notou-se que as avaliações dos usuários foram, em média, mais altas para os livros do gênero ficção. No geral, a quantidade de reviews e as avaliações dos usuários não apresentaram indícios fortes de relação, assim como a quantidade de reviews e o preço. Percebeu-se, no entanto, que os livros de não ficção costumam ser mais caros e que a média dos preços foi menor na segunda metade dos anos analisados, podendo ser um indicativo da maior acessibilidade e popularidade de eBooks na plataforma digital da Amazon.
+
+\newpage
+
+## Bibliografia
+
+KACHMAR, Chris. **Amazon Top 50 Bestselling Books 2009 - 2022**. Disponível em <https://www.kaggle.com/datasets/chriskachmar/amazon-top-50-bestselling-books-2009-2022?select=bestsellers_with_categories_2022_03_27.csv>. Acesso em: 11 jul. 2022.
+
+WICKHAM, Hadley et al. **ggplot2: elegant graphics for data analysis**. 3. ed. Disponível em <https://ggplot2-book.org/index.html>. Acesso em: 11 jul. 2022.
